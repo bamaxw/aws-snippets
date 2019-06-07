@@ -1,0 +1,57 @@
+#!/bin/bash -e
+RED="\e[1;31m"
+GREEN="\e[1;92m"
+BLUE="\e[1;94m"
+RESET="\e[0m"
+HOME="/Users/$(whoami)"
+DEFAULTS_FILE="${HOME}/.ecs-logs-defaults"
+
+printf "Checking if ${GREEN}${DEFAULTS_FILE}${RESET} exists\n"
+if [[ -f "${DEFAULTS_FILE}" ]]; then
+  source "$DEFAULTS_FILE"
+  printf "Retrieved defaults from ${GREEN}${DEFAULTS_FILE}${RESET}\n"
+  printf "${DEFAULTS_FILE} contents\n=====${BLUE}\n"
+  cat "$DEFAULTS_FILE"
+  printf "\n${RESET}=====\n"
+fi
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+  key="$1"
+  case $key in
+    -s|--service-name)
+      service_name="$2"
+      shift
+      shift
+      ;;
+    -c|--cluster)
+      cluster="$2"
+      shift
+      shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}"
+
+if [[ -z "$cluster" ]]; then
+  printf "${RED}Please provide -c|--cluster!${RESET}\n"
+  exit 1
+fi
+
+if [[ -z "$service_name" ]]; then
+  printf "${RED}Please provide -s|--service-name!${RESET}\n"
+  exit 1
+fi
+
+
+## Get the current task id corresponding to the provided service-name
+task_id=$(aws ecs list-tasks --cluster "$cluster" --service-name "$service_name" | jq ".taskArns[0]" | sed "s/.*\///g" | sed "s/\"//g")
+
+## Stream all the logs to the console
+ecs-cli logs --cluster "$cluster" --task-id "$task_id" --follow $@
